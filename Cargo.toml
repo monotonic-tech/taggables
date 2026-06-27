@@ -1,0 +1,27 @@
+[package]
+name = "taggables"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Tagged types à rebours"
+repository = "https://github.com/AmbientTea/taggables"
+documentation = "https://docs.rs/taggables"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+keywords = ["tagged", "phantom", "newtype", "type-safety", "no-std"]
+categories = ["rust-patterns", "no-std"]
+include = ["/src/**/*.rs", "/README.md", "/LICENSE-APACHE", "/LICENSE-MIT"]
+
+[workspace]
+resolver = "3"
+members = ["tests/"]
+
+[dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+dbg_macro = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
