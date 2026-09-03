@@ -1,5 +1,9 @@
 # Taggables
 
+![Crates.io Version](https://img.shields.io/crates/v/taggables)
+![docs.rs](https://img.shields.io/docsrs/taggables)
+[![CI](https://github.com/AmbientTea/taggables/actions/workflows/ci.yml/badge.svg)](https://github.com/AmbientTea/taggables/actions/workflows/ci.yml)
+
 Tagged types à rebours for Rust.
 
 <img src="https://raw.githubusercontent.com/AmbientTea/taggables/main/taggables.png"
