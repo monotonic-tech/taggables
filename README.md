@@ -2,11 +2,11 @@
 
 ![Crates.io Version](https://img.shields.io/crates/v/taggables)
 ![docs.rs](https://img.shields.io/docsrs/taggables)
-[![CI](https://github.com/AmbientTea/taggables/actions/workflows/ci.yml/badge.svg)](https://github.com/AmbientTea/taggables/actions/workflows/ci.yml)
+[![CI](https://github.com/monotonic-tech/taggables/actions/workflows/ci.yml/badge.svg)](https://github.com/monotonic-tech/taggables/actions/workflows/ci.yml)
 
 Tagged types à rebours for Rust.
 
-<img src="https://raw.githubusercontent.com/AmbientTea/taggables/main/taggables.png"
+<img src="https://raw.githubusercontent.com/monotonic-tech/taggables/main/taggables.png"
      alt="A corny looking 'Taggables' logo in a similar style to 'Lunchables', I think, idk, I eat normal food."/>
 
 ## Who is tagged type?
@@ -171,8 +171,8 @@ without any additional terms or conditions. You've been warned.
 [1]: https://github.com/poroh/tagged-types
 [2]: https://github.com/codefonsi/rust-tagged
 
-[LICENSE-APACHE]: https://github.com/AmbientTea/taggables/blob/main/LICENSE-APACHE
-[LICENSE-MIT]: https://github.com/AmbientTea/taggables/blob/main/LICENSE-MIT
+[LICENSE-APACHE]: https://github.com/monotonic-tech/taggables/blob/main/LICENSE-APACHE
+[LICENSE-MIT]: https://github.com/monotonic-tech/taggables/blob/main/LICENSE-MIT
 
 [Taggable]: https://docs.rs/taggables/latest/taggables/trait.Taggable.html
 [SemanticTag]: https://docs.rs/taggables/latest/taggables/trait.SemanticTag.html
