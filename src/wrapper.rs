@@ -83,16 +83,16 @@ impl<T: fmt::Debug, S: SemanticTag> fmt::Debug for Tagged<T, S> {
     }
 }
 
-impl<T: PartialEq, S> PartialEq for Tagged<T, S> {
-    fn eq(&self, other: &Self) -> bool {
+impl<T: PartialEq, S, OtherTag> PartialEq<Tagged<T, OtherTag>> for Tagged<T, S> {
+    fn eq(&self, other: &Tagged<T, OtherTag>) -> bool {
         self.0 == other.0
     }
 }
 
 impl<T: Eq, S> Eq for Tagged<T, S> {}
 
-impl<T: PartialOrd, S> PartialOrd for Tagged<T, S> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+impl<T: PartialOrd, S, OtherTag> PartialOrd<Tagged<T, OtherTag>> for Tagged<T, S> {
+    fn partial_cmp(&self, other: &Tagged<T, OtherTag>) -> Option<Ordering> {
         self.0.partial_cmp(&other.0)
     }
 }

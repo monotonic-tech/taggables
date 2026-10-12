@@ -1,4 +1,35 @@
-use super::*;
+use std::marker::PhantomData;
+
+use taggables::SemanticTag;
+use taggables::Taggable as _;
+
+taggables::semantic_tags! {
+    FirstNameTag("FirstName"),
+    SurnameTag("Surname"),
+}
+
+taggables::taggables! {
+    #[derive(Debug, PartialEq, Eq)]
+    pub(crate) struct TaggedString(String);
+
+    #[derive(Debug, Clone)]
+    pub(crate) struct ComplexType<T>(u64, String, T);
+
+    #[derive(Debug, PartialEq, Eq)]
+    pub(crate) struct EmptyParens();
+
+    #[derive(Debug, PartialEq, Eq)]
+    pub(crate) struct NoParens;
+}
+
+impl<S: SemanticTag> TaggedString<S> {
+    pub fn new(inner: impl Into<String>) -> Self {
+        Self(inner.into(), PhantomData)
+    }
+}
+
+type FirstName = TaggedString<FirstNameTag>;
+type Surname = TaggedString<SurnameTag>;
 
 #[test]
 fn retag_works() {

@@ -1,7 +1,13 @@
-use super::*;
-
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+
+use taggables::Tagged;
+use taggables::WrapWithTag as _;
+
+taggables::semantic_tags! {
+    FirstNameTag("FirstName"),
+    SurnameTag("Surname"),
+}
 
 #[test]
 fn wrap_with_tag_round_trips_with_into_inner() {
@@ -23,7 +29,7 @@ fn new_is_equivalent_to_wrap_with_tag() {
 fn default_delegates_to_the_inner_default() {
     let defaulted: Tagged<u8, FirstNameTag> = Tagged::default();
 
-    assert_eq!(defaulted, Tagged::new(0));
+    assert_eq!(defaulted, Tagged::<u8, FirstNameTag>::new(0));
 }
 
 fn hash(value: impl Hash) -> u64 {
@@ -45,4 +51,20 @@ fn the_tag_does_not_change_the_hash() {
     let surname = "John".to_string().wrap_with_tag::<SurnameTag>();
 
     assert_eq!(hash(first_name), hash(surname));
+}
+
+#[test]
+fn values_with_different_tags_compare_equal() {
+    let first: Tagged<u8, FirstNameTag> = Tagged::new(7);
+    let second: Tagged<u8, SurnameTag> = Tagged::new(7);
+
+    assert_eq!(first, second);
+}
+
+#[test]
+fn values_with_different_tags_compare_in_value_order() {
+    let first: Tagged<u8, FirstNameTag> = Tagged::new(7);
+    let second: Tagged<u8, SurnameTag> = Tagged::new(8);
+
+    assert!(first < second);
 }

@@ -86,8 +86,11 @@ pub trait Taggable: Sized {
     /// Change the semantic tag of `self` to `S`.
     fn retag<S>(self) -> Self::This<S>;
 
-    /// Cast `self` into `That`.
-    fn retag_into<That: Taggable>(self) -> Self::This<That::Tag> {
+    /// Change the tag of `self` and return `That`.
+    fn retag_into<That: Taggable>(self) -> That
+    where
+        Self: Taggable<This<That::Tag> = That>,
+    {
         self.retag::<That::Tag>()
     }
 

@@ -41,6 +41,84 @@ macro_rules! semantic_tags {
     (@name $tag:ident) => { ::core::stringify!($tag) };
 }
 
+/// Bulk defines semantics for one or more taggable types, by generating their tags and
+/// type aliases.
+///
+/// ```
+/// use taggables::{Taggable, Tagged};
+/// use core::marker::PhantomData;
+///
+/// taggables::semantics! {
+///     text_semantics for Tagged {
+///         // type parameters canbe passed in semantic definitions
+///         pub Email<String>,
+///         pub(crate) Username<String>,
+///     }
+/// }
+/// let email = Email::new(String::from("alice@example.com"));
+/// assert_eq!(Email::tag_name(), "Email");
+/// assert_eq!(email.into_inner(), "alice@example.com");
+///
+/// taggables::taggables! {
+///     struct ByteString<const L: usize>([u8; L]);
+/// }
+///
+/// taggables::semantics! {
+///     hash_tags for ByteString {
+///         // const generics are supported
+///         pub TxHash<32>
+///     }
+/// }
+/// ```
+#[macro_export]
+macro_rules! semantics {
+    (
+        $(#[doc = $module_doc:expr])*
+        $module_vis:vis $module:ident for $base:ident {
+            $($(#[$($attr:tt)*])* $vis:vis $name:ident <$arg:literal>),* $(,)?
+        }
+    ) => {
+        $(#[doc = $module_doc])*
+        $module_vis mod $module {
+            $($crate::semantics!(@tag $name [] $(#[$($attr)*])*);)*
+        }
+        $(
+            $(#[$($attr)*])*
+            #[doc = ::core::concat!("Tagged alias `", ::core::stringify!($name), "`.")]
+            $vis type $name = <$base<$arg> as $crate::Taggable>::This<$module::$name>;
+        )*
+    };
+    (
+        $(#[doc = $module_doc:expr])*
+        $module_vis:vis $module:ident for $base:ident {
+            $($(#[$($attr:tt)*])* $vis:vis $name:ident $(<$($arg:ty),* $(,)?>)?),* $(,)?
+        }
+    ) => {
+        $(#[doc = $module_doc])*
+        $module_vis mod $module {
+            $($crate::semantics!(@tag $name [] $(#[$($attr)*])*);)*
+        }
+        $(
+            $(#[$($attr)*])*
+            #[doc = ::core::concat!("Tagged alias `", ::core::stringify!($name), "`.")]
+            $vis type $name = <$base $(<$($arg),*>)? as $crate::Taggable>::This<$module::$name>;
+        )*
+    };
+    (@tag $name:ident [$($cfg:tt)*] #[cfg($($condition:tt)*)] $($rest:tt)*) => {
+        $crate::semantics!(@tag $name [$($cfg)* #[cfg($($condition)*)]] $($rest)*);
+    };
+    (@tag $name:ident [$($cfg:tt)*] #[cfg_attr($($condition:tt)*)] $($rest:tt)*) => {
+        $crate::semantics!(@tag $name [$($cfg)* #[cfg_attr($($condition)*)]] $($rest)*);
+    };
+    (@tag $name:ident [$($cfg:tt)*] #[$($attr:tt)*] $($rest:tt)*) => {
+        $crate::semantics!(@tag $name [$($cfg)*] $($rest)*);
+    };
+    (@tag $name:ident [$($cfg:tt)*]) => {
+        $($cfg)*
+        $crate::semantic_tags! { pub $name }
+    };
+}
+
 /// Defines one or more taggable types.
 ///
 /// # Usage
@@ -77,6 +155,24 @@ macro_rules! semantic_tags {
 /// // Promote them to customers
 /// let customers: Customers =
 ///     employees.retag::<CustomerTag>();
+///
+/// // const generics are supported
+/// taggables::taggables! {
+///     pub struct Digest<const L: usize>([u8; L]);
+/// }
+///
+/// // as are trait bounds
+/// taggables::taggables! {
+///     pub struct Sorted<K: Ord, V>(std::collections::BTreeMap<K, V>);
+/// }
+///
+/// // structs with names reserve `__tag` field for the tag
+/// taggables::taggables! {
+///     struct Batch<T, const N: usize> {
+///         values: [T; N],
+///         label: String,
+///     }
+/// }
 /// ```
 ///
 /// # Deriving traits
@@ -89,9 +185,8 @@ macro_rules! semantic_tags {
 ///
 /// # Limitations
 ///
-/// Only tuple structs with type parameters are supported for now. Named fields,
-/// lifetimes, const generics, where-clauses etc. are planned, but will probably
-/// need a derive macro. In the meantime, implement [Taggable] by hand.
+/// - only one trait bound per type parameter
+/// - lifetimes, generic defaults, where-clauses are not supported (yet)
 ///
 /// Type declarations passed to the macro must not carry a type parameter called `Tag`
 /// or `NewTag`, as they will conflict with the tag parameters used by the macro
@@ -106,36 +201,74 @@ macro_rules! semantic_tags {
 /// [derive_where]: https://crates.io/crates/derive-where
 #[macro_export]
 macro_rules! taggables {
-    (
-        $(
-            $(#[$meta:meta])*
-                $vis:vis struct $name:ident
-                $(<$($targ:ident),*>)?
-                $(($($fvis:vis $arg:ty),*))?
-                ;
-        )*
-    ) => {
-        $(
-            $(#[$meta])*
-                $vis struct $name
-                <$($($targ,)*)? Tag = ()>
-                ($($($fvis $arg,)*)? ::core::marker::PhantomData<fn(Tag) -> Tag>);
+    () => {};
+    ($(#[$meta:meta])* $vis:vis struct $name:ident < $($rest:tt)*) => {
+        $crate::taggables!(@generics [$(#[$meta])* $vis struct $name] [] [] $($rest)*);
+    };
+    ($(#[$meta:meta])* $vis:vis struct $name:ident $($rest:tt)*) => {
+        $crate::taggables!(@fields [$(#[$meta])* $vis struct $name] [] [] $($rest)*);
+    };
 
-            impl<$($($targ,)*)? Tag>
-                $crate::Taggable for $name
-                <$($($targ,)*)? Tag> {
-                    type Tag = Tag;
-                    type This<NewTag> = $name <$($($targ,)*)? NewTag>;
-                    fn retag<NewTag>(self) -> Self::This<NewTag> {
-                        let value = self;
-                        $crate::taggables!(
-                            @retag $name value [] [$($( [$arg] )*)?]
-                            // if you need more fields than this, you're a psychopath
-                            [a b c d e f g h i j k l m n p q]
-                        )
-                    }
-                }
-        )*
+    // Keep parameter declarations separate from the arguments used in type paths.
+    (@generics $head:tt [$($params:tt)*] [$($args:tt)*]
+        const $param:ident: $ty:ty, $($rest:tt)*) => {
+        $crate::taggables!(@generics $head [$($params)* const $param: $ty,]
+            [$($args)* $param,] $($rest)*);
+    };
+    (@generics $head:tt $params:tt $args:tt
+        const $param:ident: $ty:ty > $($rest:tt)*) => {
+        $crate::taggables!(@generics $head $params $args const $param: $ty, > $($rest)*);
+    };
+    (@generics $head:tt [$($params:tt)*] [$($args:tt)*]
+        $param:ident $(: $bound:path)?, $($rest:tt)*) => {
+        $crate::taggables!(@generics $head [$($params)* $param $(: $bound)?,]
+            [$($args)* $param,] $($rest)*);
+    };
+    (@generics $head:tt $params:tt $args:tt
+        $param:ident $(: $bound:path)? > $($rest:tt)*) => {
+        $crate::taggables!(@generics $head $params $args $param $(: $bound)?, > $($rest)*);
+    };
+    (@generics $head:tt $params:tt $args:tt > $($rest:tt)*) => {
+        $crate::taggables!(@fields $head $params $args $($rest)*);
+    };
+
+    (@fields [$(#[$meta:meta])* $vis:vis struct $name:ident]
+        [$($params:tt)*] [$($args:tt)*]
+        $(($($fvis:vis $arg:ty),* $(,)?))?; $($rest:tt)*) => {
+        $(#[$meta])*
+        $vis struct $name<$($params)* Tag = ()>(
+            $($($fvis $arg,)*)? ::core::marker::PhantomData<fn(Tag) -> Tag>
+        );
+
+        impl<$($params)* Tag> $crate::Taggable for $name<$($args)* Tag> {
+            type Tag = Tag;
+            type This<NewTag> = $name<$($args)* NewTag>;
+            fn retag<NewTag>(self) -> Self::This<NewTag> {
+                let value = self;
+                $crate::taggables!(@retag $name value [] [$($([$arg])*)?]
+                    [a b c d e f g h i j k l m n p q])
+            }
+        }
+        $crate::taggables!($($rest)*);
+    };
+    (@fields [$(#[$meta:meta])* $vis:vis struct $name:ident]
+        [$($params:tt)*] [$($args:tt)*]
+        {$($(#[$fmeta:meta])* $fvis:vis $field:ident: $arg:ty),* $(,)?} $($rest:tt)*) => {
+        $(#[$meta])*
+        $vis struct $name<$($params)* Tag = ()> {
+            $($(#[$fmeta])* $fvis $field: $arg,)*
+            __tag: ::core::marker::PhantomData<fn(Tag) -> Tag>,
+        }
+
+        impl<$($params)* Tag> $crate::Taggable for $name<$($args)* Tag> {
+            type Tag = Tag;
+            type This<NewTag> = $name<$($args)* NewTag>;
+            fn retag<NewTag>(self) -> Self::This<NewTag> {
+                let $name { $($field,)* __tag: _ } = self;
+                $name { $($field,)* __tag: ::core::marker::PhantomData }
+            }
+        }
+        $crate::taggables!($($rest)*);
     };
 
     // No way to get self.0, self.1 ... so just zip a bunch of identifiers with the fields and destructure.

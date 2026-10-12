@@ -7,7 +7,7 @@ name = "taggables"
 version = "0.1.0"
 
 [[package]]
-name = "tests"
+name = "taggables-tests"
 version = "0.1.0"
 dependencies = [
  "taggables",

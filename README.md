@@ -117,6 +117,22 @@ taggables::semantic_tags! {
 pub type Email = TaggableString<EmailTag>;
 ```
 
+And [semantics] to declare tags and aliases together:
+
+```rust
+taggables::taggables! {
+    #[derive(Debug, PartialEq, Eq)]
+    pub struct TaggableString(String);
+}
+
+taggables::semantics! {
+    text_semantics for TaggableString {
+        pub Email<String>,
+        pub Username<String>,
+    }
+}
+```
+
 ## Revenge of the Wrapper
 
 Alas, you cannot just stick an additional type param onto a foreign type and call it
