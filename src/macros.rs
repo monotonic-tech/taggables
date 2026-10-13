@@ -74,35 +74,51 @@ macro_rules! semantic_tags {
 macro_rules! semantics {
     (
         $(#[doc = $module_doc:expr])*
-        $module_vis:vis $module:ident for $base:ident {
-            $($(#[$($attr:tt)*])* $vis:vis $name:ident <$arg:literal>),* $(,)?
-        }
+        $module_vis:vis $module:ident for $base:ident { $($entries:tt)* }
     ) => {
         $(#[doc = $module_doc])*
         $module_vis mod $module {
-            $($crate::semantics!(@tag $name [] $(#[$($attr)*])*);)*
+            $crate::semantics!(@entries [tag] $($entries)*);
         }
-        $(
-            $(#[$($attr)*])*
-            #[doc = ::core::concat!("Tagged alias `", ::core::stringify!($name), "`.")]
-            $vis type $name = <$base<$arg> as $crate::Taggable>::This<$module::$name>;
-        )*
+        $crate::semantics!(@entries [alias $base $module] $($entries)*);
     };
-    (
-        $(#[doc = $module_doc:expr])*
-        $module_vis:vis $module:ident for $base:ident {
-            $($(#[$($attr:tt)*])* $vis:vis $name:ident $(<$($arg:ty),* $(,)?>)?),* $(,)?
-        }
-    ) => {
-        $(#[doc = $module_doc])*
-        $module_vis mod $module {
-            $($crate::semantics!(@tag $name [] $(#[$($attr)*])*);)*
-        }
-        $(
-            $(#[$($attr)*])*
-            #[doc = ::core::concat!("Tagged alias `", ::core::stringify!($name), "`.")]
-            $vis type $name = <$base $(<$($arg),*>)? as $crate::Taggable>::This<$module::$name>;
-        )*
+    (@entries $mode:tt) => {};
+    (@entries $mode:tt , $($rest:tt)*) => {
+        $crate::semantics!(@entries $mode $($rest)*);
+    };
+    (@entries $mode:tt $(#[$($attr:tt)*])* $vis:vis $name:ident < $($rest:tt)*) => {
+        $crate::semantics!(@args $mode [$(#[$($attr)*])* $vis $name] [] $($rest)*);
+    };
+    (@entries $mode:tt $(#[$($attr:tt)*])* $vis:vis $name:ident $($rest:tt)*) => {
+        $crate::semantics!(@emit $mode [$(#[$($attr)*])* $vis $name] []);
+        $crate::semantics!(@entries $mode $($rest)*);
+    };
+    (@args $mode:tt $entry:tt [$($args:tt)*] $arg:literal $(,)? > $($rest:tt)*) => {
+        $crate::semantics!(@emit $mode $entry [<$($args)* $arg>]);
+        $crate::semantics!(@entries $mode $($rest)*);
+    };
+    (@args $mode:tt $entry:tt [$($args:tt)*] $arg:literal, $($rest:tt)*) => {
+        $crate::semantics!(@args $mode $entry [$($args)* $arg,] $($rest)*);
+    };
+    (@args $mode:tt $entry:tt [$($args:tt)*] $arg:ty $(,)? > $($rest:tt)*) => {
+        $crate::semantics!(@emit $mode $entry [<$($args)* $arg>]);
+        $crate::semantics!(@entries $mode $($rest)*);
+    };
+    (@args $mode:tt $entry:tt [$($args:tt)*] $arg:ty, $($rest:tt)*) => {
+        $crate::semantics!(@args $mode $entry [$($args)* $arg,] $($rest)*);
+    };
+    (@args $mode:tt $entry:tt [$($args:tt)*] > $($rest:tt)*) => {
+        $crate::semantics!(@emit $mode $entry [<$($args)*>]);
+        $crate::semantics!(@entries $mode $($rest)*);
+    };
+    (@emit [tag] [$(#[$($attr:tt)*])* $vis:vis $name:ident] $args:tt) => {
+        $crate::semantics!(@tag $name [] $(#[$($attr)*])*);
+    };
+    (@emit [alias $base:ident $module:ident]
+        [$(#[$($attr:tt)*])* $vis:vis $name:ident] [$($args:tt)*]) => {
+        $(#[$($attr)*])*
+        #[doc = ::core::concat!("Tagged alias `", ::core::stringify!($name), "`.")]
+        $vis type $name = <$base $($args)* as $crate::Taggable>::This<$module::$name>;
     };
     (@tag $name:ident [$($cfg:tt)*] #[cfg($($condition:tt)*)] $($rest:tt)*) => {
         $crate::semantics!(@tag $name [$($cfg)* #[cfg($($condition)*)]] $($rest)*);
@@ -253,10 +269,10 @@ macro_rules! taggables {
     };
     (@fields [$(#[$meta:meta])* $vis:vis struct $name:ident]
         [$($params:tt)*] [$($args:tt)*]
-        {$($(#[$fmeta:meta])* $fvis:vis $field:ident: $arg:ty),* $(,)?} $($rest:tt)*) => {
+        {$($(#[$($fmeta:tt)*])* $fvis:vis $field:ident: $arg:ty),* $(,)?} $($rest:tt)*) => {
         $(#[$meta])*
         $vis struct $name<$($params)* Tag = ()> {
-            $($(#[$fmeta])* $fvis $field: $arg,)*
+            $($(#[$($fmeta)*])* $fvis $field: $arg,)*
             __tag: ::core::marker::PhantomData<fn(Tag) -> Tag>,
         }
 
@@ -264,11 +280,59 @@ macro_rules! taggables {
             type Tag = Tag;
             type This<NewTag> = $name<$($args)* NewTag>;
             fn retag<NewTag>(self) -> Self::This<NewTag> {
-                let $name { $($field,)* __tag: _ } = self;
-                $name { $($field,)* __tag: ::core::marker::PhantomData }
+                $crate::taggables!(@named_retag $name self [] []
+                    $($(#[$($fmeta)*])* $field,)*)
             }
         }
         $crate::taggables!($($rest)*);
+    };
+
+    (@named_retag $name:ident $value:ident $fields:tt [$($cfg:tt)*]
+        #[cfg($($condition:tt)*)] $($rest:tt)*) => {
+        $crate::taggables!(@named_retag $name $value $fields
+            [$($cfg)* #[cfg($($condition)*)]] $($rest)*)
+    };
+    (@named_retag $name:ident $value:ident $fields:tt [$($cfg:tt)*]
+        #[cfg_attr($condition:meta, $($attrs:tt)*)] $($rest:tt)*) => {
+        $crate::taggables!(@named_cfg $name $value $fields [$($cfg)*]
+            [$($rest)*] [$condition; $($attrs)*])
+    };
+    (@named_cfg $name:ident $value:ident $fields:tt $cfg:tt $rest:tt
+        [$condition:meta;] $($pending:tt)*) => {
+        $crate::taggables!(@named_cfg $name $value $fields $cfg $rest $($pending)*)
+    };
+    (@named_cfg $name:ident $value:ident $fields:tt [$($cfg:tt)*] $rest:tt
+        [$condition:meta; cfg($predicate:meta) $(, $($attrs:tt)*)?] $($pending:tt)*) => {
+        $crate::taggables!(@named_cfg $name $value $fields
+            [$($cfg)* #[cfg(any(not($condition), $predicate))]] $rest
+            [$condition; $($($attrs)*)?] $($pending)*)
+    };
+    (@named_cfg $name:ident $value:ident $fields:tt $cfg:tt $rest:tt
+        [$condition:meta; cfg_attr($nested:meta, $($inner:tt)*) $(, $($attrs:tt)*)?]
+        $($pending:tt)*) => {
+        $crate::taggables!(@named_cfg $name $value $fields $cfg $rest
+            [all($condition, $nested); $($inner)*]
+            [$condition; $($($attrs)*)?] $($pending)*)
+    };
+    (@named_cfg $name:ident $value:ident $fields:tt $cfg:tt $rest:tt
+        [$condition:meta; $attr:meta $(, $($attrs:tt)*)?] $($pending:tt)*) => {
+        $crate::taggables!(@named_cfg $name $value $fields $cfg $rest
+            [$condition; $($($attrs)*)?] $($pending)*)
+    };
+    (@named_cfg $name:ident $value:ident $fields:tt $cfg:tt [$($rest:tt)*]) => {
+        $crate::taggables!(@named_retag $name $value $fields $cfg $($rest)*)
+    };
+    (@named_retag $name:ident $value:ident $fields:tt $cfg:tt
+        #[$($attr:tt)*] $($rest:tt)*) => {
+        $crate::taggables!(@named_retag $name $value $fields $cfg $($rest)*)
+    };
+    (@named_retag $name:ident $value:ident [$($fields:tt)*] [$($cfg:tt)*]
+        $field:ident, $($rest:tt)*) => {
+        $crate::taggables!(@named_retag $name $value
+            [$($fields)* $($cfg)* $field: $value.$field,] [] $($rest)*)
+    };
+    (@named_retag $name:ident $value:ident [$($fields:tt)*] []) => {
+        $name { $($fields)* __tag: ::core::marker::PhantomData }
     };
 
     // No way to get self.0, self.1 ... so just zip a bunch of identifiers with the fields and destructure.

@@ -101,3 +101,73 @@ fn const_generic_struct_works_with_semantics() {
 
     assert_eq!(value.untag().0, [1, 2, 3]);
 }
+
+#[test]
+fn retag_preserves_only_enabled_named_fields() {
+    taggables::taggables! {
+        struct Record {
+            #[cfg(all())]
+            value: String,
+            #[cfg(any())]
+            disabled: u8,
+            #[cfg_attr(all(), cfg(any()))]
+            also_disabled: u8,
+        }
+    }
+    let value = Record::<()> {
+        value: "kept".into(),
+        __tag: PhantomData,
+    };
+    let tagged: Record<FirstNameTag> = value.retag();
+
+    assert_eq!(tagged.value, "kept");
+}
+
+#[test]
+#[deny(unused_doc_comments)]
+fn conditional_field_docs_do_not_apply_to_retag_expressions() {
+    taggables::taggables! {
+        struct Record {
+            #[cfg_attr(all(), doc = "Value")]
+            value: String,
+        }
+    }
+    let value = Record::<()> {
+        value: "kept".into(),
+        __tag: PhantomData,
+    };
+
+    assert_eq!(value.retag::<FirstNameTag>().value, "kept");
+}
+
+#[test]
+#[deny(unused_doc_comments)]
+fn nested_conditional_attributes_preserve_field_conditions() {
+    taggables::taggables! {
+        struct Record {
+            #[cfg_attr(all(), doc = "Value", cfg_attr(all(), doc = "Nested", cfg(all())))]
+            #[cfg_attr(any(), cfg(any()))]
+            value: String,
+            #[cfg_attr(all(), cfg_attr(any(), cfg(any())))]
+            kept: u8,
+            #[cfg_attr(any(), cfg_attr(all(), cfg(any())))]
+            also_kept: u8,
+            #[cfg_attr(all(), doc = "Disabled", cfg_attr(all(), cfg(any()), doc = "Nested"))]
+            disabled: u8,
+            #[cfg_attr(all(), cfg(all()), cfg(any()))]
+            also_disabled: u8,
+        }
+    }
+    let value = Record::<()> {
+        value: "kept".into(),
+        kept: 7,
+        also_kept: 8,
+        __tag: PhantomData,
+    };
+    let tagged = value.retag::<FirstNameTag>();
+
+    assert_eq!(
+        (tagged.value.as_str(), tagged.kept, tagged.also_kept),
+        ("kept", 7, 8)
+    );
+}

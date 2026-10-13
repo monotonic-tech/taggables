@@ -107,3 +107,32 @@ fn const_argument_is_preserved() {
     let hash: Hash = Digest([7; 28], PhantomData);
     assert_eq!(hash.0.len(), 28);
 }
+
+#[test]
+fn mixed_type_and_const_arguments_are_preserved() {
+    taggables::taggables! {
+        struct Buffer<T, const N: usize>([T; N]);
+    }
+    taggables::semantics! {
+        tags for Buffer { Bytes<Vec<u8>, 2> }
+    }
+    let bytes: Bytes = Buffer([vec![1], vec![2]], PhantomData);
+
+    assert_eq!(bytes.0, [vec![1], vec![2]]);
+}
+
+#[test]
+#[allow(dead_code)]
+fn bulk_aliases_compile_with_the_default_recursion_limit() {
+    taggables::semantics! {
+        tags for Tagged {
+            T01<u8>, T02<u8>, T03<u8>, T04<u8>, T05<u8>,
+            T06<u8>, T07<u8>, T08<u8>, T09<u8>, T10<u8>,
+            T11<u8>, T12<u8>, T13<u8>, T14<u8>, T15<u8>,
+            T16<u8>, T17<u8>, T18<u8>, T19<u8>, T20<u8>,
+            T21<u8>, T22<u8>, T23<u8>, T24<u8>, T25<u8>,
+        }
+    }
+
+    assert_eq!(T25::new(25).into_inner(), 25);
+}
