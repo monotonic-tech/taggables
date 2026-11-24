@@ -44,6 +44,10 @@ macro_rules! semantic_tags {
 /// Bulk defines semantics for one or more taggable types, by generating their tags and
 /// type aliases.
 ///
+/// *Note*: this macro assumes the tag is the last type parameter on the taggable types,
+/// to avoid defining aliases through [Taggable::This] type constructor, which tends to
+/// confuse the compiler into rejecting impls for semantic types.
+///
 /// ```
 /// use taggables::{Taggable, Tagged};
 /// use core::marker::PhantomData;
@@ -94,21 +98,21 @@ macro_rules! semantics {
         $crate::semantics!(@entries $mode $($rest)*);
     };
     (@args $mode:tt $entry:tt [$($args:tt)*] $arg:literal $(,)? > $($rest:tt)*) => {
-        $crate::semantics!(@emit $mode $entry [<$($args)* $arg>]);
+        $crate::semantics!(@emit $mode $entry [$($args)* $arg,]);
         $crate::semantics!(@entries $mode $($rest)*);
     };
     (@args $mode:tt $entry:tt [$($args:tt)*] $arg:literal, $($rest:tt)*) => {
         $crate::semantics!(@args $mode $entry [$($args)* $arg,] $($rest)*);
     };
     (@args $mode:tt $entry:tt [$($args:tt)*] $arg:ty $(,)? > $($rest:tt)*) => {
-        $crate::semantics!(@emit $mode $entry [<$($args)* $arg>]);
+        $crate::semantics!(@emit $mode $entry [$($args)* $arg,]);
         $crate::semantics!(@entries $mode $($rest)*);
     };
     (@args $mode:tt $entry:tt [$($args:tt)*] $arg:ty, $($rest:tt)*) => {
         $crate::semantics!(@args $mode $entry [$($args)* $arg,] $($rest)*);
     };
     (@args $mode:tt $entry:tt [$($args:tt)*] > $($rest:tt)*) => {
-        $crate::semantics!(@emit $mode $entry [<$($args)*>]);
+        $crate::semantics!(@emit $mode $entry [$($args)*]);
         $crate::semantics!(@entries $mode $($rest)*);
     };
     (@emit [tag] [$(#[$($attr:tt)*])* $vis:vis $name:ident] $args:tt) => {
@@ -118,7 +122,7 @@ macro_rules! semantics {
         [$(#[$($attr:tt)*])* $vis:vis $name:ident] [$($args:tt)*]) => {
         $(#[$($attr)*])*
         #[doc = ::core::concat!("Tagged alias `", ::core::stringify!($name), "`.")]
-        $vis type $name = <$base $($args)* as $crate::Taggable>::This<$module::$name>;
+        $vis type $name = $base<$($args)* $module::$name>;
     };
     (@tag $name:ident [$($cfg:tt)*] #[cfg($($condition:tt)*)] $($rest:tt)*) => {
         $crate::semantics!(@tag $name [$($cfg)* #[cfg($($condition)*)]] $($rest)*);
@@ -202,7 +206,8 @@ macro_rules! semantics {
 /// # Limitations
 ///
 /// - only one trait bound per type parameter
-/// - lifetimes, generic defaults, where-clauses are not supported (yet)
+/// - lifetimes and where-clauses are not supported (yet)
+/// - struct fields with `cfg_attr`
 ///
 /// Type declarations passed to the macro must not carry a type parameter called `Tag`
 /// or `NewTag`, as they will conflict with the tag parameters used by the macro
@@ -219,44 +224,46 @@ macro_rules! semantics {
 macro_rules! taggables {
     () => {};
     ($(#[$meta:meta])* $vis:vis struct $name:ident < $($rest:tt)*) => {
-        $crate::taggables!(@generics [$(#[$meta])* $vis struct $name] [] [] $($rest)*);
+        $crate::taggables!(@generics [$(#[$meta])* $vis struct $name] [] [] [] $($rest)*);
     };
     ($(#[$meta:meta])* $vis:vis struct $name:ident $($rest:tt)*) => {
-        $crate::taggables!(@fields [$(#[$meta])* $vis struct $name] [] [] $($rest)*);
+        $crate::taggables!(@fields [$(#[$meta])* $vis struct $name] [] [] [] $($rest)*);
     };
 
-    // Keep parameter declarations separate from the arguments used in type paths.
-    (@generics $head:tt [$($params:tt)*] [$($args:tt)*]
-        const $param:ident: $ty:ty, $($rest:tt)*) => {
-        $crate::taggables!(@generics $head [$($params)* const $param: $ty,]
-            [$($args)* $param,] $($rest)*);
+    // Keep declaration defaults out of impl parameters and type arguments.
+    (@generics $head:tt [$($params:tt)*] [$($impl_params:tt)*] [$($args:tt)*]
+        const $param:ident: $ty:ty $(= $default:tt)?, $($rest:tt)*) => {
+        $crate::taggables!(@generics $head [$($params)* const $param: $ty $(= $default)?,]
+            [$($impl_params)* const $param: $ty,] [$($args)* $param,] $($rest)*);
     };
-    (@generics $head:tt $params:tt $args:tt
-        const $param:ident: $ty:ty > $($rest:tt)*) => {
-        $crate::taggables!(@generics $head $params $args const $param: $ty, > $($rest)*);
+    (@generics $head:tt $params:tt $impl_params:tt $args:tt
+        const $param:ident: $ty:ty $(= $default:tt)? > $($rest:tt)*) => {
+        $crate::taggables!(@generics $head $params $impl_params $args
+            const $param: $ty $(= $default)?, > $($rest)*);
     };
-    (@generics $head:tt [$($params:tt)*] [$($args:tt)*]
-        $param:ident $(: $bound:path)?, $($rest:tt)*) => {
-        $crate::taggables!(@generics $head [$($params)* $param $(: $bound)?,]
-            [$($args)* $param,] $($rest)*);
+    (@generics $head:tt [$($params:tt)*] [$($impl_params:tt)*] [$($args:tt)*]
+        $param:ident $(: $bound:path)? $(= $default:ty)?, $($rest:tt)*) => {
+        $crate::taggables!(@generics $head [$($params)* $param $(: $bound)? $(= $default)?,]
+            [$($impl_params)* $param $(: $bound)?,] [$($args)* $param,] $($rest)*);
     };
-    (@generics $head:tt $params:tt $args:tt
-        $param:ident $(: $bound:path)? > $($rest:tt)*) => {
-        $crate::taggables!(@generics $head $params $args $param $(: $bound)?, > $($rest)*);
+    (@generics $head:tt $params:tt $impl_params:tt $args:tt
+        $param:ident $(: $bound:path)? $(= $default:ty)? > $($rest:tt)*) => {
+        $crate::taggables!(@generics $head $params $impl_params $args
+            $param $(: $bound)? $(= $default)?, > $($rest)*);
     };
-    (@generics $head:tt $params:tt $args:tt > $($rest:tt)*) => {
-        $crate::taggables!(@fields $head $params $args $($rest)*);
+    (@generics $head:tt $params:tt $impl_params:tt $args:tt > $($rest:tt)*) => {
+        $crate::taggables!(@fields $head $params $impl_params $args $($rest)*);
     };
 
     (@fields [$(#[$meta:meta])* $vis:vis struct $name:ident]
-        [$($params:tt)*] [$($args:tt)*]
-        $(($($fvis:vis $arg:ty),* $(,)?))?; $($rest:tt)*) => {
+        [$($params:tt)*] [$($impl_params:tt)*] [$($args:tt)*]
+        $(($($(#[$fmeta:meta])* $fvis:vis $arg:ty),* $(,)?))?; $($rest:tt)*) => {
         $(#[$meta])*
         $vis struct $name<$($params)* Tag = ()>(
-            $($($fvis $arg,)*)? ::core::marker::PhantomData<fn(Tag) -> Tag>
+            $($($(#[$fmeta])* $fvis $arg,)*)? ::core::marker::PhantomData<fn(Tag) -> Tag>
         );
 
-        impl<$($params)* Tag> $crate::Taggable for $name<$($args)* Tag> {
+        impl<$($impl_params)* Tag> $crate::Taggable for $name<$($args)* Tag> {
             type Tag = Tag;
             type This<NewTag> = $name<$($args)* NewTag>;
             fn retag<NewTag>(self) -> Self::This<NewTag> {
@@ -268,7 +275,7 @@ macro_rules! taggables {
         $crate::taggables!($($rest)*);
     };
     (@fields [$(#[$meta:meta])* $vis:vis struct $name:ident]
-        [$($params:tt)*] [$($args:tt)*]
+        [$($params:tt)*] [$($impl_params:tt)*] [$($args:tt)*]
         {$($(#[$($fmeta:tt)*])* $fvis:vis $field:ident: $arg:ty),* $(,)?} $($rest:tt)*) => {
         $(#[$meta])*
         $vis struct $name<$($params)* Tag = ()> {
@@ -276,7 +283,7 @@ macro_rules! taggables {
             __tag: ::core::marker::PhantomData<fn(Tag) -> Tag>,
         }
 
-        impl<$($params)* Tag> $crate::Taggable for $name<$($args)* Tag> {
+        impl<$($impl_params)* Tag> $crate::Taggable for $name<$($args)* Tag> {
             type Tag = Tag;
             type This<NewTag> = $name<$($args)* NewTag>;
             fn retag<NewTag>(self) -> Self::This<NewTag> {

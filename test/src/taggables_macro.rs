@@ -18,7 +18,12 @@ taggables::taggables! {
         label: String,
     }
 
-    struct WithTraitBound<K: Ord, V>(std::collections::BTreeMap<K, V>);
+    /// Doc comments and type parameter defaults are supported
+    struct WithTraitBound<K: Ord, V = u32>(
+        /// Tuple field doc comments are supported too
+        #[cfg_attr(all(), doc = "attributes too")]
+        std::collections::BTreeMap<K, V>
+    );
 
     struct WithAssociatedType<T: Iterator, const N: usize> {
         values: [T::Item; N],

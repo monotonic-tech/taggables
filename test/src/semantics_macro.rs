@@ -136,3 +136,40 @@ fn bulk_aliases_compile_with_the_default_recursion_limit() {
 
     assert_eq!(T25::new(25).into_inner(), 25);
 }
+
+#[test]
+fn semantics_impls_support() {
+    taggables::taggables! {
+        struct TaggedU64(u64);
+    }
+
+    taggables::semantics! {
+        tags for TaggedU64 {
+            Age,
+            Candles,
+        }
+    }
+
+    impl Age {
+        fn new(value: u64) -> Self {
+            Self(value, core::marker::PhantomData)
+        }
+    }
+
+    impl From<u64> for Age {
+        fn from(age: u64) -> Self {
+            Self::new(age)
+        }
+    }
+
+    trait Value {
+        fn value(&self) -> u64;
+    }
+    impl Value for Candles {
+        fn value(&self) -> u64 {
+            self.0
+        }
+    }
+
+    assert_eq!(Age::from(9u64).retag_into::<Candles>().value(), 9);
+}

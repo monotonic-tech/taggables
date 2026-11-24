@@ -127,8 +127,8 @@ taggables::taggables! {
 
 taggables::semantics! {
     text_semantics for TaggableString {
-        pub Email<String>,
-        pub Username<String>,
+        pub Email,
+        pub Username,
     }
 }
 ```
