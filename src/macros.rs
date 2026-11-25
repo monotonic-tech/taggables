@@ -45,7 +45,7 @@ macro_rules! semantic_tags {
 /// type aliases.
 ///
 /// *Note*: this macro assumes the tag is the last type parameter on the taggable types,
-/// to avoid defining aliases through [Taggable::This] type constructor, which tends to
+/// to avoid defining aliases through [crate::Taggable::This] type constructor, which tends to
 /// confuse the compiler into rejecting impls for semantic types.
 ///
 /// ```
